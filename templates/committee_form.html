@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ '編輯投票設定' if committee else '新增自訂投票項目' }} - 學校教師委員會投票與智慧計票系統{% endblock %}
+{% block title %}{{ '編輯投票設定' if committee else '新增自訂投票項目' }} - 新北市中山國小各項委員會投票與計票系統{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -18,7 +18,7 @@
                 <div class="mb-3">
                     <label for="title" class="form-label fw-bold fs-5">投票種類/名稱 <span class="text-danger">*</span></label>
                     <input type="text" class="form-control form-control-lg" id="title" required
-                        placeholder="例：113學年度教師評審委員會 (教評會) 委員票選"
+                        placeholder="例：新北市板橋區中山國民小學116年度特殊優良教師(初選)圈選"
                         value="{{ committee.title if committee else '' }}">
                 </div>
 
@@ -80,40 +80,40 @@
                     <div class="col-md-4">
                         <label for="seats_count" class="form-label fw-bold">應選名額 (正取人數)</label>
                         <input type="number" class="form-control" id="seats_count" min="1" required
-                            value="{{ committee.seats_count if committee else 7 }}">
+                            value="{{ committee.seats_count if committee is not none and committee.seats_count is not none else 7 }}">
                     </div>
                     <div class="col-md-4">
-                        <label for="alternate_count" class="form-label fw-bold">候補名額 (人數)</label>
+                        <label for="alternate_count" class="form-label fw-bold">候補名額 (設為0則無候補人數)</label>
                         <input type="number" class="form-control" id="alternate_count" min="0" required
-                            value="{{ committee.alternate_count if committee else 3 }}">
+                            value="{{ committee.alternate_count if committee is not none and committee.alternate_count is not none else 0 }}">
                     </div>
                     <div class="col-md-4">
                         <label for="max_votes_per_ballot" class="form-label fw-bold">每張選票圈選上限人數</label>
                         <input type="number" class="form-control" id="max_votes_per_ballot" min="1" required
-                            value="{{ committee.max_votes_per_ballot if committee else 4 }}">
+                            value="{{ committee.max_votes_per_ballot if committee is not none and committee.max_votes_per_ballot is not none else 4 }}">
                     </div>
                 </div>
 
                 <!-- 性別規定 (僅在 show_gender 開啟時作用) -->
                 <h5 class="fw-bold text-dark mt-4 mb-3"><i class="fa-solid fa-scale-balanced me-2 text-primary"></i>性別保障條款 (選填)</h5>
                 <div class="mb-3">
-                    {% set rule = committee.gender_rule_type if committee else 'one_third' %}
+                    {% set rule = committee.gender_rule_type if committee else 'none' %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="gender_rule_type" id="rule_none" value="none" {{ 'checked' if rule == 'none' }}>
+                        <label class="form-check-label fw-bold text-dark" for="rule_none">
+                            不設限 (僅按得票高低排序)
+                        </label>
+                    </div>
                     <div class="form-check mb-2">
                         <input class="form-check-input" type="radio" name="gender_rule_type" id="rule_one_third" value="one_third" {{ 'checked' if rule == 'one_third' }}>
-                        <label class="form-check-label fw-bold text-primary" for="rule_one_third">
+                        <label class="form-check-label text-primary" for="rule_one_third">
                             任一性別不得少於 1/3 (教評會、考核會條款)
                         </label>
                     </div>
                     <div class="form-check mb-2">
                         <input class="form-check-input" type="radio" name="gender_rule_type" id="rule_half_female" value="half_female" {{ 'checked' if rule == 'half_female' }}>
-                        <label class="form-check-label fw-bold text-danger" for="rule_half_female">
+                        <label class="form-check-label text-danger" for="rule_half_female">
                             女性委員不得少於 1/2 (性平會條款)
-                        </label>
-                    </div>
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="radio" name="gender_rule_type" id="rule_none" value="none" {{ 'checked' if rule == 'none' }}>
-                        <label class="form-check-label text-muted" for="rule_none">
-                            不設限 (僅按高低票排序)
                         </label>
                     </div>
                 </div>
@@ -143,12 +143,21 @@ function saveCommittee() {
     const auth_mode = document.querySelector('input[name="auth_mode"]:checked').value;
     const gender_rule_type = document.querySelector('input[name="gender_rule_type"]:checked').value;
 
+    const seatsVal = document.getElementById('seats_count').value;
+    const seats_count = (seatsVal !== '' && !isNaN(seatsVal)) ? parseInt(seatsVal) : 7;
+
+    const altVal = document.getElementById('alternate_count').value;
+    const alternate_count = (altVal !== '' && !isNaN(altVal)) ? parseInt(altVal) : 0;
+
+    const maxVal = document.getElementById('max_votes_per_ballot').value;
+    const max_votes_per_ballot = (maxVal !== '' && !isNaN(maxVal)) ? parseInt(maxVal) : 4;
+
     const payload = {
         title: title,
         description: document.getElementById('description').value,
-        seats_count: parseInt(document.getElementById('seats_count').value) || 5,
-        alternate_count: parseInt(document.getElementById('alternate_count').value) || 2,
-        max_votes_per_ballot: parseInt(document.getElementById('max_votes_per_ballot').value) || 4,
+        seats_count: seats_count,
+        alternate_count: alternate_count,
+        max_votes_per_ballot: max_votes_per_ballot,
         auth_mode: auth_mode,
         show_gender: document.getElementById('show_gender').checked ? 1 : 0,
         show_admin: document.getElementById('show_admin').checked ? 1 : 0,
@@ -167,7 +176,7 @@ function saveCommittee() {
     .then(res => res.json())
     .then(data => {
         if (data.success) {
-            Swal.fire('儲存成功', '投票設定與欄位顯示已順利儲存！', 'success')
+            Swal.fire('儲存成功', '投票設定已順利儲存！', 'success')
             .then(() => {
                 location.href = `/roster?committee_id=${data.id || id}`;
             });
