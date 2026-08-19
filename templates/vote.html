@@ -102,15 +102,18 @@
     </div>
     {% endif %}
 
-    <!-- 1. 免密碼領票模式 (auth_mode === 'direct' 且未選擇老師時顯示) -->
-    <div v-if="authMode === 'direct' && !currentTeacher" class="py-1">
+    <!-- 1. 教師領票與選名單區 (適用 direct 與 passcode 兩種模式) -->
+    <div v-if="(authMode === 'direct' || authMode === 'passcode') && !currentTeacher" class="py-1">
         <div class="card card-custom bg-white p-3 p-md-4 text-center mb-3 border-start border-4 border-success">
             <h4 class="fw-bold text-dark mb-1 fs-5 fs-md-4">
                 <i class="fa-solid fa-stamp text-success me-1"></i>{{ committee.title }}
             </h4>
-            <p class="text-muted small mb-2">請在下方點選您的姓名直接領取選票（點擊姓氏快速定位）</p>
+            <p class="text-muted small mb-2">
+                <span v-if="authMode === 'passcode'" class="text-danger fw-bold"><i class="fa-solid fa-shield-halved me-1"></i>已啟用防冒領密碼機制：點選姓名後需輸入個人專屬密碼驗證</span>
+                <span v-else>請在下方點選您的姓名領取選票（點擊姓氏快速定位）</span>
+            </p>
             
-            <!-- 📱 手機專用：姓氏快速篩選頁籤 -->
+            <!-- 📱 姓氏快速篩選頁籤 -->
             <div class="d-flex flex-wrap gap-1 justify-content-center mb-2">
                 <button v-for="s in commonSurnames" :key="s" 
                     :class="['btn', 'surname-btn', selectedSurname === s ? 'btn-success fw-bold' : 'btn-outline-secondary']"
@@ -132,6 +135,7 @@
                     <div class="fs-6 text-truncate">[[ t.name ]]</div>
                     <div class="mt-1" style="font-size: 0.7rem;">
                         <span v-if="isTeacherVoted(t.id)" class="badge bg-dark px-1">已完成</span>
+                        <span v-else-if="authMode === 'passcode'" class="badge bg-warning text-dark px-1"><i class="fa-solid fa-key me-1"></i>需密碼</span>
                         <span v-else class="badge bg-success px-1">點擊領票</span>
                     </div>
                 </button>
@@ -139,31 +143,38 @@
         </div>
     </div>
 
-    <!-- 2. 密碼驗證模式 -->
-    <div class="row justify-content-center py-4" v-if="authMode === 'passcode' && !isAuthenticated">
-        <div class="col-md-6 col-lg-5">
-            <div class="card card-custom bg-white p-4 text-center shadow-lg">
-                <div class="avatar-circle mx-auto mb-3 text-primary">
-                    <i class="fa-solid fa-user-shield fs-1"></i>
+    <!-- 2. 密碼驗證對話框 Modal (啟用 passcode 模式時點選姓名後彈出) -->
+    <div class="modal fade" id="passcodeVerifyModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white py-2 px-3">
+                    <h5 class="modal-title fs-6"><i class="fa-solid fa-user-shield me-2"></i>驗證投票人身份</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <h4 class="fw-bold mb-1">{{ committee.title }}</h4>
-                <p class="text-muted small mb-3">請輸入您的個人專屬 6 碼投票密碼進行驗證</p>
+                <div class="modal-body p-4 text-center">
+                    <div class="fs-5 fw-bold text-dark mb-2" v-if="pendingTeacher">
+                        【[[ pendingTeacher.name ]]】老師，您好！
+                    </div>
+                    <p class="text-muted small mb-3">為確保投票公正防範冒領，請輸入您的個人 6 碼專屬投票密碼：</p>
 
-                <div class="form-floating mb-3">
-                    <input type="text" class="form-control text-center fs-3 fw-bold letter-spacing-2" 
-                        id="passcode" placeholder="請輸入密碼" v-model="voterCode" @keyup.enter="authenticateVoter">
-                    <label for="passcode">個人投票密碼</label>
+                    <div class="form-floating mb-3 style-passcode">
+                        <input type="text" class="form-control text-center fs-3 fw-bold letter-spacing-2" 
+                            id="voterPasscodeInput" placeholder="請輸入6碼密碼" v-model="voterCode" @keyup.enter="confirmPasscodeAuth">
+                        <label for="voterPasscodeInput">6 碼專屬密碼</label>
+                    </div>
                 </div>
-
-                <button class="btn btn-primary btn-lg w-100 fw-bold shadow-sm" @click="authenticateVoter">
-                    <i class="fa-solid fa-key me-2"></i>開始劃選選票
-                </button>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary fw-bold" @click="confirmPasscodeAuth">
+                        <i class="fa-solid fa-unlock me-1"></i>驗證解鎖選票
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- 3. 選票圈選與大名冊視圖 -->
-    <div v-if="authMode === 'public' || (authMode === 'direct' && currentTeacher) || (authMode === 'passcode' && isAuthenticated)">
+    <!-- 3. 選票圈選與大名冊視圖 (已領票/解鎖或公開模式時顯示) -->
+    <div v-if="authMode === 'public' || ((authMode === 'direct' || authMode === 'passcode') && currentTeacher)">
         <!-- 頂端固定懸浮選票計數器 -->
         <div class="sticky-counter-bar p-2 p-md-3 rounded-3 mb-3 d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -176,7 +187,7 @@
             </div>
 
             <div class="d-flex gap-1 w-100 w-md-auto mt-1 mt-md-0">
-                <button v-if="authMode === 'direct'" class="btn btn-outline-secondary btn-sm flex-shrink-0" @click="currentTeacher = null">
+                <button v-if="authMode === 'direct' || authMode === 'passcode'" class="btn btn-outline-secondary btn-sm flex-shrink-0" @click="currentTeacher = null">
                     返回換人
                 </button>
                 <button class="btn btn-success fw-bold shadow w-100" 
@@ -195,7 +206,7 @@
             </div>
         </div>
 
-        <!-- 手機版優化 2 欄網格選票卡片 Layout (82 位候選人超好找) -->
+        <!-- 手機版優化 2 欄網格選票卡片 Layout -->
         <div class="row g-2 mb-5">
             <div class="col-6 col-md-4 col-lg-3" v-for="c in filteredCandidates" :key="c.id">
                 <div :class="['card', 'candidate-card', 'p-2', { selected: selectedIds.includes(c.id) }]"
@@ -275,13 +286,14 @@ createApp({
         return {
             committeeId: {{ committee.id }},
             maxVotes: {{ committee.max_votes_per_ballot }},
-            authMode: "{{ committee.auth_mode or 'direct' }}",
+            authMode: "{{ committee.auth_mode or 'passcode' }}",
             showGender: {{ 1 if committee.show_gender else 0 }},
             showAdmin: {{ 1 if committee.show_admin else 0 }},
             voterCode: '',
             isAuthenticated: false,
             allTeachers: {{ teachers | tojson }},
             votedTeacherIds: [],
+            pendingTeacher: null,
             currentTeacher: null,
             candidates: [],
             selectedIds: [],
@@ -292,8 +304,7 @@ createApp({
     },
     computed: {
         commonSurnames() {
-            const list = ['全部', '陳', '林', '黃', '張', '李', '王', '吳', '劉', '蔡', '許', '鄭', '謝', '郭', '賴', '徐', '周'];
-            return list;
+            return ['全部', '陳', '林', '黃', '張', '李', '王', '吳', '劉', '蔡', '許', '鄭', '謝', '郭', '賴', '徐', '周'];
         },
         filteredTeachers() {
             return this.allTeachers.filter(t => {
@@ -336,32 +347,41 @@ createApp({
                 Swal.fire('提醒', '該位老師已完成過投票！', 'info');
                 return;
             }
-            this.currentTeacher = teacher;
-            this.selectedIds = [];
+            if (this.authMode === 'passcode') {
+                this.pendingTeacher = teacher;
+                this.voterCode = '';
+                const modal = new bootstrap.Modal(document.getElementById('passcodeVerifyModal'));
+                modal.show();
+            } else {
+                this.currentTeacher = teacher;
+                this.selectedIds = [];
+            }
         },
-        authenticateVoter() {
+        confirmPasscodeAuth() {
             if (!this.voterCode) {
-                Swal.fire('提醒', '請輸入個人投票密碼', 'warning');
+                Swal.fire('提醒', '請輸入專屬 6 碼投票密碼', 'warning');
                 return;
             }
 
-            fetch('/api/voter_auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    committee_id: this.committeeId,
-                    voter_code: this.voterCode
-                })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    this.isAuthenticated = true;
-                    this.currentTeacher = data.teacher;
-                    this.selectedIds = [];
-                } else {
-                    Swal.fire('驗證失敗', data.message, 'error');
-                }
+            const teacherCode = (this.pendingTeacher.voter_code || '').toUpperCase();
+            const inputCode = this.voterCode.trim().toUpperCase();
+
+            if (inputCode !== teacherCode) {
+                Swal.fire('密碼錯誤', '您輸入的投票密碼不正確，無法驗證！', 'error');
+                return;
+            }
+
+            bootstrap.Modal.getInstance(document.getElementById('passcodeVerifyModal')).hide();
+            this.currentTeacher = this.pendingTeacher;
+            this.pendingTeacher = null;
+            this.selectedIds = [];
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: `【${this.currentTeacher.name} 老師】身份驗證成功！`,
+                showConfirmButton: false,
+                timer: 1500
             });
         },
         toggleSelection(id) {
@@ -396,13 +416,9 @@ createApp({
                     bootstrap.Modal.getInstance(document.getElementById('reviewModal')).hide();
                     Swal.fire('投票完成', '您的無記名選票已順利投遞完成！', 'success')
                     .then(() => {
-                        if (this.authMode === 'direct') {
-                            this.currentTeacher = null;
-                            this.selectedIds = [];
-                            this.loadVotedTeachers();
-                        } else {
-                            location.href = '/';
-                        }
+                        this.currentTeacher = null;
+                        this.selectedIds = [];
+                        this.loadVotedTeachers();
                     });
                 } else {
                     Swal.fire('投遞失敗', data.message, 'error');
