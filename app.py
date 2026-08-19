@@ -8,11 +8,7 @@ from word_parser import parse_word_docx
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
 
-# 設定基底目錄，確保無論從何處執行都能精準找到 templates 資料夾
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
-
-app = Flask(__name__, template_folder=TEMPLATE_DIR)
+app = Flask(__name__)
 app.secret_key = 'school_voting_system_secret_key'
 
 # 初始化資料庫
@@ -137,12 +133,12 @@ def create_committee():
         data.get('title'),
         data.get('description', ''),
         data.get('seats_count', 5),
-        data.get('alternate_count', 2),
+        data.get('alternate_count', 0),
         data.get('max_votes_per_ballot', 4),
-        data.get('auth_mode', 'direct'),
+        data.get('auth_mode', 'passcode'),
         data.get('show_gender', 1),
         data.get('show_admin', 1),
-        data.get('gender_rule_type', 'one_third'),
+        data.get('gender_rule_type', 'none'),
         data.get('min_male_count', 0),
         data.get('min_female_count', 0),
         data.get('identity_rule_type', 'none'),
@@ -173,11 +169,20 @@ def update_delete_committee(committee_id):
         WHERE id = ?
     """, (
         data.get('title'), data.get('description'), data.get('seats_count'), data.get('alternate_count'),
-        data.get('max_votes_per_ballot'), data.get('auth_mode', 'direct'), data.get('show_gender', 1),
+        data.get('max_votes_per_ballot'), data.get('auth_mode', 'passcode'), data.get('show_gender', 1),
         data.get('show_admin', 1), data.get('gender_rule_type'), data.get('min_male_count'),
         data.get('min_female_count'), data.get('identity_rule_type'), data.get('min_non_admin_count'),
         data.get('status'), committee_id
     ))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/candidate/<int:candidate_id>', methods=['DELETE'])
+def delete_candidate(candidate_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM candidates WHERE id = ?", (candidate_id,))
     conn.commit()
     conn.close()
     return jsonify({'success': True})
@@ -193,7 +198,7 @@ def handle_teachers():
         return jsonify(teachers)
     
     data = request.json
-    voter_code = generate_voter_code()
+    voter_code = data.get('voter_code') or generate_voter_code()
     cursor.execute("""
         INSERT INTO teachers (name, gender, department, is_admin, voter_code)
         VALUES (?, ?, ?, ?, ?)
@@ -237,7 +242,7 @@ def batch_add_candidates(committee_id):
 
             cursor.execute("SELECT id FROM teachers WHERE name = ?", (name,))
             if not cursor.fetchone():
-                vcode = generate_voter_code()
+                vcode = '5313'
                 cursor.execute("INSERT INTO teachers (name, gender, department, is_admin, voter_code) VALUES (?, ?, ?, ?, ?)",
                                (name, '男', '一般', 0, vcode))
 
@@ -261,7 +266,7 @@ def batch_add_voters():
     for name in names:
         cursor.execute("SELECT id FROM teachers WHERE name = ?", (name,))
         if not cursor.fetchone():
-            vcode = generate_voter_code()
+            vcode = '5313'
             cursor.execute("INSERT INTO teachers (name, gender, department, is_admin, voter_code) VALUES (?, ?, ?, ?, ?)",
                            (name, '男', '一般', 0, vcode))
             added_count += 1
@@ -382,6 +387,7 @@ def import_candidates(committee_id):
     cursor = conn.cursor()
     
     if target_type == 'both':
+        # 清空舊候選人名單，將匯入的新名單做為唯一候選人名單！
         cursor.execute("DELETE FROM candidates WHERE committee_id = ?", (committee_id,))
         count = 0
         for idx, c in enumerate(candidates, start=1):
@@ -398,7 +404,7 @@ def import_candidates(committee_id):
 
             cursor.execute("SELECT id FROM teachers WHERE name = ?", (name,))
             if not cursor.fetchone():
-                vcode = generate_voter_code()
+                vcode = '5313'
                 cursor.execute("INSERT INTO teachers (name, gender, department, is_admin, voter_code) VALUES (?, ?, ?, ?, ?)",
                                (name, gender, '一般', is_admin, vcode))
         conn.commit()
@@ -413,7 +419,7 @@ def import_candidates(committee_id):
                 continue
             cursor.execute("SELECT id FROM teachers WHERE name = ?", (name,))
             if not cursor.fetchone():
-                vcode = generate_voter_code()
+                vcode = '5313'
                 cursor.execute("INSERT INTO teachers (name, gender, department, is_admin, voter_code) VALUES (?, ?, ?, ?, ?)",
                                (name, '男', '一般', 0, vcode))
                 count += 1
