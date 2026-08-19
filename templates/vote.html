@@ -72,7 +72,7 @@
 <div id="voteApp" class="container">
 
     <!-- ⏰ 極致醒目之投票截止時間警示橫幅 -->
-    <div class="alert deadline-banner p-3 mb-4 rounded-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div class="alert deadline-banner p-3 mb-3 rounded-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div class="d-flex align-items-center gap-3">
             <div class="bg-danger text-white p-2 rounded-circle">
                 <i class="fa-solid fa-clock-stop fs-3"></i>
@@ -86,6 +86,16 @@
         </div>
         <span class="badge bg-danger fs-6 px-3 py-2">務請留意截止時間</span>
     </div>
+
+    <!-- 📋 投票說明與注意事項欄位 (完整保留並顯眼呈現) -->
+    {% if committee.description %}
+    <div class="alert alert-light border border-primary border-opacity-25 shadow-sm p-3 mb-4 rounded-3">
+        <div class="fw-bold text-primary mb-1 fs-6">
+            <i class="fa-solid fa-circle-info me-2"></i>投票說明與注意事項：
+        </div>
+        <div class="text-dark fs-6" style="white-space: pre-wrap; line-height: 1.6;">{{ committee.description }}</div>
+    </div>
+    {% endif %}
 
     <!-- 1. 免密碼領票模式 (auth_mode === 'direct' 且未選擇老師時顯示) -->
     <div v-if="authMode === 'direct' && !currentTeacher" class="py-2">
