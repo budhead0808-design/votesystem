@@ -233,12 +233,17 @@ def batch_add_candidates(committee_id):
             num_str, name = match.groups()
             num = int(num_str) if num_str else current_num
             
-            cursor.execute("""
-                INSERT INTO candidates (committee_id, candidate_number, name, gender, department, is_admin)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (committee_id, num, name, '男', '一般', 0))
-            added_count += 1
-            current_num = max(current_num + 1, num + 1)
+            cursor.execute("SELECT id FROM candidates WHERE committee_id = ? AND name = ?", (committee_id, name))
+            existing_c = cursor.fetchone()
+            if existing_c:
+                cursor.execute("UPDATE candidates SET candidate_number = ? WHERE id = ?", (num, existing_c['id']))
+            else:
+                cursor.execute("""
+                    INSERT INTO candidates (committee_id, candidate_number, name, gender, department, is_admin)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (committee_id, num, name, '男', '一般', 0))
+                added_count += 1
+                current_num = max(current_num + 1, num + 1)
 
             cursor.execute("SELECT id FROM teachers WHERE name = ?", (name,))
             if not cursor.fetchone():
@@ -387,20 +392,30 @@ def import_candidates(committee_id):
     cursor = conn.cursor()
     
     if target_type == 'both':
-        # 清空舊候選人名單，將匯入的新名單做為唯一候選人名單！
-        cursor.execute("DELETE FROM candidates WHERE committee_id = ?", (committee_id,))
+        # 智慧 UPSERT 模式：保留既有候選人與其歷史得票紀錄！
         count = 0
         for idx, c in enumerate(candidates, start=1):
             num = c.get('candidate_number') or idx
             name = c.get('name')
+            if not name:
+                continue
+
             gender = c.get('gender') if c.get('gender') in ['男', '女'] else '男'
             is_admin = c.get('is_admin', 0)
 
-            cursor.execute("""
-                INSERT INTO candidates (committee_id, candidate_number, name, gender, department, is_admin)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (committee_id, num, name, gender, '一般', is_admin))
-            count += 1
+            cursor.execute("SELECT id FROM candidates WHERE committee_id = ? AND name = ?", (committee_id, name))
+            existing_c = cursor.fetchone()
+
+            if existing_c:
+                cursor.execute("""
+                    UPDATE candidates SET candidate_number = ?, gender = ?, is_admin = ? WHERE id = ?
+                """, (num, gender, is_admin, existing_c['id']))
+            else:
+                cursor.execute("""
+                    INSERT INTO candidates (committee_id, candidate_number, name, gender, department, is_admin)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (committee_id, num, name, gender, '一般', is_admin))
+                count += 1
 
             cursor.execute("SELECT id FROM teachers WHERE name = ?", (name,))
             if not cursor.fetchone():
