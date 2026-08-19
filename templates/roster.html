@@ -1,0 +1,451 @@
+{% extends 'base.html' %}
+
+{% block title %}全校教師名冊與選票匯入 - 學校教師委員會投票與智慧計票系統{% endblock %}
+
+{% block content %}
+<div id="rosterApp" class="container-fluid">
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-7">
+            <h2 class="fw-bold text-dark mb-1">
+                <i class="fa-solid fa-users-gear text-primary me-2"></i>全校教師名冊與選務管理
+            </h2>
+            <p class="text-muted">匯入候選人名冊（預設同時具備投票權）或新增非候選人之純投票權人名單。</p>
+        </div>
+        <div class="col-md-5 text-md-end d-flex gap-2 justify-content-end flex-wrap">
+            <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#batchCandidateModal">
+                <i class="fa-solid fa-user-plus me-1"></i>批次新增候選人
+            </button>
+            <button class="btn btn-outline-success fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#batchVoterModal">
+                <i class="fa-solid fa-users me-1"></i>批次新增非候選人投票人
+            </button>
+            <button class="btn btn-outline-dark fw-bold shadow-sm" @click="generateAllVoterCodes">
+                <i class="fa-solid fa-key me-1"></i>重設密碼
+            </button>
+        </div>
+    </div>
+
+    <!-- 上傳與選擇選區 -->
+    <div class="row g-4 mb-4">
+        <!-- 檔案上傳卡片 (支援 Word / Excel) -->
+        <div class="col-md-7">
+            <div class="card card-custom bg-white p-4 h-100 border-start border-4 border-info">
+                <h5 class="fw-bold text-dark mb-2">
+                    <i class="fa-solid fa-file-word text-info me-2 fs-4"></i>匯入 Word (.docx) 選票或 Excel 名冊
+                </h5>
+                <p class="small text-muted mb-3">
+                    系統自動識別 Word/Excel 檔案中的號次與姓名，上傳後可選擇匯入為「候選人+投票人」或「僅投票人」。
+                </p>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">1. 選擇投票項目：</label>
+                    <select class="form-select" v-model="selectedCommitteeId" @change="loadCandidates">
+                        <option value="">-- 請選擇投票項目 --</option>
+                        <option v-for="c in committees" :key="c.id" :value="c.id">
+                            [[ c.title ]] (正取[[ c.seats_count ]]人)
+                        </option>
+                    </select>
+                </div>
+
+                <div class="mb-3" v-if="selectedCommitteeId">
+                    <label class="form-label fw-bold">2. 上傳 Word (.docx) 或 Excel (.xlsx/.csv) 檔案：</label>
+                    <input type="file" class="form-control form-control-lg" ref="fileInput" 
+                        accept=".docx,.xlsx,.xls,.csv" @change="handleFileUpload">
+                </div>
+
+                <div class="alert alert-info py-2 small mb-0 d-flex align-items-center gap-2" v-if="isUploading">
+                    <div class="spinner-border spinner-border-sm text-info"></div>
+                    <span>智慧解析檔案中，請稍候...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 手動新增單筆教師 -->
+        <div class="col-md-5">
+            <div class="card card-custom bg-white p-4 h-100">
+                <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-user-plus me-2 text-success"></i>手動新增單筆投票人</h5>
+                <div class="mb-3">
+                    <label class="form-label">教師姓名</label>
+                    <input type="text" class="form-control" placeholder="例如：張小明" v-model="newTeacher.name">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <select class="form-select" v-model="newTeacher.gender">
+                            <option value="男">男</option>
+                            <option value="女">女</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <select class="form-select" v-model="newTeacher.is_admin">
+                            <option :value="0">未兼行政</option>
+                            <option :value="1">兼任行政</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-success w-100" @click="addSingleTeacher">
+                    <i class="fa-solid fa-plus me-1"></i>手動新增至全校投票權名冊
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 教師名冊與投票候選人清單 -->
+    <div class="card card-custom bg-white p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0">
+                <i class="fa-solid fa-list me-2 text-primary"></i>全校投票人名冊 (共 [[ teachers.length ]] 位具投票權人)
+            </h5>
+            <div class="input-group style-search" style="max-width: 300px;">
+                <span class="input-group-text bg-light"><i class="fa-solid fa-search"></i></span>
+                <input type="text" class="form-control" placeholder="搜尋姓名..." v-model="searchQuery">
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th width="70">編號</th>
+                        <th>姓名</th>
+                        <th>投票權與候選身分</th>
+                        <th>專屬投票密碼 (備用)</th>
+                        <th class="text-center">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(t, index) in filteredTeachers" :key="t.id">
+                        <td>[[ index + 1 ]]</td>
+                        <td><strong class="fs-6 text-dark">[[ t.name ]]</strong></td>
+                        <td>
+                            <span v-if="isCandidate(t.name)" class="badge bg-primary fs-6">
+                                <i class="fa-solid fa-check me-1"></i>候選人 (兼具投票權)
+                            </span>
+                            <span v-else class="badge bg-info text-dark fs-6">
+                                <i class="fa-solid fa-user me-1"></i>僅投票權人 (非候選人)
+                            </span>
+                        </td>
+                        <td><code class="fs-6 fw-bold text-primary">[[ t.voter_code || '未生成' ]]</code></td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-danger" @click="deleteTeacher(t.id)">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 批次貼上新增候選人 Modal -->
+    <div class="modal fade" id="batchCandidateModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="fa-solid fa-user-plus me-2"></i>快捷複製貼上新增候選人</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-primary">選擇要新增候選人的投票項目：</label>
+                        <select class="form-select" v-model="batchCandidateCommitteeId">
+                            <option value="">-- 請選擇投票項目 --</option>
+                            <option v-for="c in committees" :key="c.id" :value="c.id">
+                                [[ c.title ]]
+                            </option>
+                        </select>
+                    </div>
+
+                    <p class="small text-muted mb-2">請將候選人姓名貼在下方文字框（支援「張小明」或「1. 張小明」格式，一行一個）：</p>
+                    <textarea class="form-control" rows="8" placeholder="1. 許吟如&#10;2. 羅任鎗&#10;3. 姚明賢" v-model="batchCandidateText"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary fw-bold" @click="submitBatchCandidates">
+                        <i class="fa-solid fa-check me-1"></i>一鍵新增為候選人 (兼具投票權)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批次複製貼上新增非候選人 Modal -->
+    <div class="modal fade" id="batchVoterModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="fa-solid fa-users me-2"></i>快速複製貼上新增投票權人 (非候選人)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="small text-muted">請將非候選人但具備投票權的老師姓名貼在下方文字框中（一行一個姓名）：</p>
+                    <textarea class="form-control" rows="8" placeholder="張小明&#10;李大華&#10;陳美麗" v-model="batchVoterText"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-success fw-bold" @click="submitBatchVoters">
+                        <i class="fa-solid fa-check me-1"></i>一鍵新增至投票人名冊
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Word / Excel 解析結果校對 Modal -->
+    <div class="modal fade" id="parsedModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="fa-solid fa-file-word me-2"></i>Word / Excel 智慧解析結果預覽</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-content p-4">
+                    <div class="mb-3 p-3 bg-light rounded border">
+                        <label class="form-label fw-bold text-primary">請選擇此名單的匯入目標類別：</label>
+                        <div class="form-check mb-1">
+                            <input class="form-check-input" type="radio" name="target_type" id="type_both" value="both" v-model="importTargetType">
+                            <label class="form-check-label fw-bold text-dark" for="type_both">
+                                匯入為【候選人名冊】(預設同時具備投票權)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="target_type" id="type_voters" value="voters_only" v-model="importTargetType">
+                            <label class="form-check-label fw-bold text-info" for="type_voters">
+                                僅匯入為【投票權人】(非候選人，僅參加劃票)
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="70">號次</th>
+                                    <th>姓名</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="item in parsedList" :key="item.candidate_number">
+                                    <td>[[ item.candidate_number ]]</td>
+                                    <td><input type="text" class="form-control form-control-sm" v-model="item.name"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-success fw-bold" @click="confirmImportParsedList">
+                        <i class="fa-solid fa-check me-1"></i>確認一鍵匯入名冊
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const { createApp } = Vue;
+
+createApp({
+    delimiters: ['[[', ']]'],
+    data() {
+        return {
+            committees: [],
+            selectedCommitteeId: '',
+            batchCandidateCommitteeId: '',
+            teachers: [],
+            candidates: [],
+            searchQuery: '',
+            isUploading: false,
+            parsedList: [],
+            importTargetType: 'both',
+            batchCandidateText: '',
+            batchVoterText: '',
+            newTeacher: { name: '', gender: '男', is_admin: 0 }
+        }
+    },
+    computed: {
+        candidateNames() {
+            return this.candidates.map(c => c.name);
+        },
+        filteredTeachers() {
+            if (!this.searchQuery) return this.teachers;
+            const q = this.searchQuery.toLowerCase();
+            return this.teachers.filter(t => t.name.toLowerCase().includes(q));
+        }
+    },
+    mounted() {
+        this.fetchCommittees();
+        this.fetchTeachers();
+        const urlParams = new URLSearchParams(window.location.search);
+        const cid = urlParams.get('committee_id');
+        if (cid) {
+            this.selectedCommitteeId = cid;
+            this.batchCandidateCommitteeId = cid;
+            this.loadCandidates();
+        }
+    },
+    methods: {
+        fetchCommittees() {
+            fetch('/api/committees')
+            .then(res => res.json())
+            .then(data => {
+                this.committees = data;
+                if (data.length > 0 && !this.batchCandidateCommitteeId) {
+                    this.batchCandidateCommitteeId = data[0].id;
+                }
+            });
+        },
+        fetchTeachers() {
+            fetch('/api/teachers')
+            .then(res => res.json())
+            .then(data => this.teachers = data);
+        },
+        loadCandidates() {
+            if (!this.selectedCommitteeId) return;
+            fetch(`/api/committee/${this.selectedCommitteeId}/candidates`)
+            .then(res => res.json())
+            .then(data => this.candidates = data);
+        },
+        isCandidate(name) {
+            return this.candidateNames.includes(name);
+        },
+        handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            this.isUploading = true;
+
+            fetch('/api/upload_word', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                this.isUploading = false;
+                if (data.success && data.candidates.length > 0) {
+                    this.parsedList = data.candidates;
+                    const parsedModal = new bootstrap.Modal(document.getElementById('parsedModal'));
+                    parsedModal.show();
+                } else {
+                    Swal.fire('解析失敗', data.message || '未讀取到有效的姓名資料', 'error');
+                }
+            })
+            .catch(err => {
+                this.isUploading = false;
+                Swal.fire('錯誤', '檔案上傳失敗', 'error');
+            });
+        },
+        confirmImportParsedList() {
+            if (!this.selectedCommitteeId) {
+                Swal.fire('提醒', '請先選擇投票項目', 'warning');
+                return;
+            }
+
+            fetch(`/api/committee/${this.selectedCommitteeId}/import_candidates`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    candidates: this.parsedList,
+                    target_type: this.importTargetType 
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('parsedModal')).hide();
+                    Swal.fire('成功', `已成功匯入 ${data.imported_count} 位名單！`, 'success');
+                    this.fetchTeachers();
+                    this.loadCandidates();
+                }
+            });
+        },
+        submitBatchCandidates() {
+            if (!this.batchCandidateCommitteeId) {
+                Swal.fire('提醒', '請選擇要新增候選人的投票項目', 'warning');
+                return;
+            }
+            if (!this.batchCandidateText.trim()) {
+                Swal.fire('提醒', '請輸入候選人姓名', 'warning');
+                return;
+            }
+
+            fetch(`/api/committee/${this.batchCandidateCommitteeId}/batch_add_candidates`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ names_text: this.batchCandidateText })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('batchCandidateModal')).hide();
+                    this.batchCandidateText = '';
+                    Swal.fire('成功', `已成功新增 ${data.added_count} 位候選人（兼具投票權）！`, 'success');
+                    this.fetchTeachers();
+                    this.loadCandidates();
+                }
+            });
+        },
+        submitBatchVoters() {
+            if (!this.batchVoterText.trim()) {
+                Swal.fire('提醒', '請輸入老師姓名', 'warning');
+                return;
+            }
+            fetch('/api/batch_add_voters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ names_text: this.batchVoterText })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('batchVoterModal')).hide();
+                    this.batchVoterText = '';
+                    Swal.fire('成功', `已新增 ${data.added_count} 位投票權人！`, 'success');
+                    this.fetchTeachers();
+                }
+            });
+        },
+        addSingleTeacher() {
+            if (!this.newTeacher.name) {
+                Swal.fire('提醒', '請輸入姓名', 'warning');
+                return;
+            }
+            fetch('/api/teachers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.newTeacher)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    this.newTeacher = { name: '', gender: '男', is_admin: 0 };
+                    this.fetchTeachers();
+                }
+            });
+        },
+        deleteTeacher(id) {
+            fetch(`/api/teachers/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) this.fetchTeachers();
+            });
+        },
+        generateAllVoterCodes() {
+            fetch('/api/generate_voter_codes', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                Swal.fire('成功', '投票密碼已重設！', 'success');
+                this.fetchTeachers();
+            });
+        },
+        printPasscodes() {
+            window.open('/print_passcodes', '_blank');
+        }
+    }
+}).mount('#rosterApp');
+</script>
+{% endblock %}

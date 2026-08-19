@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+
+{% block title %}首頁儀表板 - 學校教師委員會投票與智慧計票系統{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col-md-8">
+        <h2 class="fw-bold text-dark mb-1">
+            <i class="fa-solid fa-list-check text-primary me-2"></i>委員會投票項目管理
+        </h2>
+        <p class="text-muted">方便老師進行各項委員票選、統一開票與性別/身分保障智慧結算。</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        <a href="/committee/new" class="btn btn-primary btn-lg shadow-sm">
+            <i class="fa-solid fa-plus me-2"></i>新增自訂投票項目
+        </a>
+    </div>
+</div>
+
+<!-- 快速統計卡片 -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card card-custom bg-white border-start border-4 border-primary p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">進行中投票</div>
+                    <div class="fs-3 fw-bold text-primary">{{ active_count }}</div>
+                </div>
+                <i class="fa-solid fa-vote-yea fs-1 text-primary opacity-25"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-custom bg-white border-start border-4 border-success p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">已完成/結算</div>
+                    <div class="fs-3 fw-bold text-success">{{ closed_count }}</div>
+                </div>
+                <i class="fa-solid fa-square-poll-vertical fs-1 text-success opacity-25"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-custom bg-white border-start border-4 border-info p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">全校教師人數</div>
+                    <div class="fs-3 fw-bold text-info">{{ teacher_count }}</div>
+                </div>
+                <i class="fa-solid fa-id-card fs-1 text-info opacity-25"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-custom bg-white border-start border-4 border-warning p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">選務操作功能</div>
+                    <a href="/roster" class="btn btn-sm btn-outline-warning mt-1">匯入 Word/Excel 選票</a>
+                </div>
+                <i class="fa-solid fa-file-word fs-1 text-warning opacity-25"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 投票列表 -->
+<div class="card card-custom bg-white p-4">
+    <h5 class="fw-bold mb-3"><i class="fa-solid fa-box-archive me-2 text-primary"></i>所有投票項目列表</h5>
+    
+    {% if not committees %}
+    <div class="text-center py-5 text-muted">
+        <i class="fa-solid fa-folder-open fs-1 mb-3 text-secondary"></i>
+        <h5>目前尚無任何投票項目</h5>
+        <p>點擊上方「新增自訂投票項目」按鈕開始設定！</p>
+    </div>
+    {% else %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>投票名稱</th>
+                    <th>名額 (正取/候補)</th>
+                    <th>圈選限制</th>
+                    <th>性別比例規定</th>
+                    <th>狀態</th>
+                    <th class="text-center">操作選務功能</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in committees %}
+                <tr>
+                    <td>
+                        <strong class="fs-6 text-dark">{{ c.title }}</strong>
+                        {% if c.description %}
+                        <div class="small text-muted">{{ c.description }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge bg-primary fs-6">正取 {{ c.seats_count }} 人</span>
+                        <span class="badge bg-secondary fs-6">候補 {{ c.alternate_count }} 人</span>
+                    </td>
+                    <td><span class="badge bg-light text-dark border">上限 {{ c.max_votes_per_ballot }} 人</span></td>
+                    <td>
+                        {% if c.gender_rule_type == 'one_third' %}
+                        <span class="badge bg-info text-dark"><i class="fa-solid fa-scale-balanced me-1"></i>任一性別 >= 1/3</span>
+                        {% elif c.gender_rule_type == 'half_female' %}
+                        <span class="badge bg-danger"><i class="fa-solid fa-venus me-1"></i>女性 >= 1/2</span>
+                        {% elif c.gender_rule_type == 'custom' %}
+                        <span class="badge bg-purple text-dark border">自訂 (男≥{{ c.min_male_count }}, 女≥{{ c.min_female_count }})</span>
+                        {% else %}
+                        <span class="badge bg-light text-muted border">不設限</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if c.status == 'active' %}
+                        <span class="badge bg-success"><i class="fa-solid fa-spinner fa-spin me-1"></i>進行中</span>
+                        {% elif c.status == 'closed' %}
+                        <span class="badge bg-secondary">已截止</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">草稿備妥</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <div class="btn-group" role="group">
+                            <a href="/vote/{{ c.id }}" class="btn btn-sm btn-outline-primary fw-bold" target="_blank">
+                                <i class="fa-solid fa-vote-yea me-1"></i>線上投票頁
+                            </a>
+                            <a href="/manual_count/{{ c.id }}" class="btn btn-sm btn-outline-info">
+                                <i class="fa-solid fa-hand me-1"></i>開票助手
+                            </a>
+                            <a href="/result/{{ c.id }}" class="btn btn-sm btn-success fw-bold">
+                                <i class="fa-solid fa-chart-column me-1"></i>當選與結算結果
+                            </a>
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown"></button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-menu-item dropdown-item" href="/print_ballot/{{ c.id }}" target="_blank"><i class="fa-solid fa-print me-2"></i>列印紙本選票</a></li>
+                                <li><a class="dropdown-menu-item dropdown-item" href="/committee/edit/{{ c.id }}"><i class="fa-solid fa-pen-to-square me-2"></i>修改投票設定</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-menu-item dropdown-item text-danger" href="javascript:void(0)" onclick="deleteCommittee({{ c.id }})"><i class="fa-solid fa-trash me-2"></i>刪除投票</a></li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function deleteCommittee(id) {
+    Swal.fire({
+        title: '確定要刪除這項投票？',
+        text: '這將會一併刪除相關候選人與投票紀錄',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: '確定刪除',
+        cancelButtonText: '取消'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`/api/committee/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('已刪除', '該投票項目已順利刪除', 'success').then(() => location.reload());
+                }
+            });
+        }
+    });
+}
+</script>
+{% endblock %}

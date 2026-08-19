@@ -1,0 +1,372 @@
+{% extends 'base.html' %}
+
+{% block title %}線上投票 - {{ committee.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .teacher-select-btn {
+        transition: all 0.2s ease;
+        border-radius: 8px;
+    }
+    .teacher-select-btn:hover {
+        transform: translateY(-2px);
+    }
+    .candidate-card {
+        cursor: pointer;
+        border: 2px solid #e0e0e0;
+        border-radius: 12px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        background: white;
+    }
+    .candidate-card:hover {
+        transform: translateY(-3px);
+        border-color: #0d6efd;
+        box-shadow: 0 6px 16px rgba(13, 110, 253, 0.15);
+    }
+    .candidate-card.selected {
+        border-color: #198754;
+        background-color: #f0fdf4;
+        box-shadow: 0 0 0 3px rgba(25, 135, 84, 0.25);
+    }
+    .candidate-card .check-icon {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        font-size: 1.4rem;
+        color: #198754;
+        opacity: 0;
+        transform: scale(0.5);
+        transition: all 0.2s ease;
+    }
+    .candidate-card.selected .check-icon {
+        opacity: 1;
+        transform: scale(1);
+    }
+    .number-circle {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background-color: #e9ecef;
+        color: #495057;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .candidate-card.selected .number-circle {
+        background-color: #198754;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="voteApp" class="container">
+
+    <!-- 1. 免密碼領票模式 (auth_mode === 'direct' 且未選擇老師時顯示) -->
+    <div v-if="authMode === 'direct' && !currentTeacher" class="py-4">
+        <div class="card card-custom bg-white p-4 text-center mb-4 border-start border-4 border-success">
+            <h3 class="fw-bold text-dark mb-1">
+                <i class="fa-solid fa-stamp text-success me-2"></i>{{ committee.title }} - 點選姓名領取選票
+            </h3>
+            <p class="text-muted">請在下方點選您的姓名直接領取選票，免記任何密碼，簡單順暢！</p>
+            
+            <div class="input-group mx-auto style-search" style="max-width: 400px;">
+                <span class="input-group-text bg-light"><i class="fa-solid fa-search"></i></span>
+                <input type="text" class="form-control" placeholder="輸入姓名快速尋找..." v-model="teacherSearchQuery">
+            </div>
+        </div>
+
+        <div class="row g-3 mb-5">
+            <div class="col-6 col-sm-4 col-md-3 col-lg-2" v-for="t in filteredTeachers" :key="t.id">
+                <button :class="['btn', 'w-100', 'py-3', 'fw-bold', 'teacher-select-btn', isTeacherVoted(t.id) ? 'btn-secondary disabled opacity-50' : 'btn-outline-primary']"
+                    @click="selectTeacherToVote(t)">
+                    <i class="fa-solid fa-user me-1"></i>[[ t.name ]]
+                    <div class="small mt-1">
+                        <span v-if="isTeacherVoted(t.id)" class="badge bg-dark">已完成投票</span>
+                        <span v-else class="badge bg-success">點擊領票</span>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 密碼驗證模式 (auth_mode === 'passcode' 且未驗證時顯示) -->
+    <div class="row justify-content-center py-5" v-if="authMode === 'passcode' && !isAuthenticated">
+        <div class="col-md-6 col-lg-5">
+            <div class="card card-custom bg-white p-4 text-center shadow-lg">
+                <div class="avatar-circle mx-auto mb-3 text-primary">
+                    <i class="fa-solid fa-user-shield fs-1"></i>
+                </div>
+                <h3 class="fw-bold mb-1">{{ committee.title }}</h3>
+                <p class="text-muted small mb-4">請輸入您的個人專屬 6 碼投票密碼進行驗證</p>
+
+                <div class="form-floating mb-3">
+                    <input type="text" class="form-control text-center fs-3 fw-bold letter-spacing-2" 
+                        id="passcode" placeholder="請輸入密碼" v-model="voterCode" @keyup.enter="authenticateVoter">
+                    <label for="passcode">個人投票密碼 (6位數碼)</label>
+                </div>
+
+                <button class="btn btn-primary btn-lg w-100 fw-bold shadow-sm" @click="authenticateVoter">
+                    <i class="fa-solid fa-key me-2"></i>開始進行無記名圈選
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 選票圈選與大名冊視圖 (已領票/解鎖或公開模式時顯示) -->
+    <div v-if="authMode === 'public' || (authMode === 'direct' && currentTeacher) || (authMode === 'passcode' && isAuthenticated)">
+        <!-- 頂端固定懸浮選票計數器 -->
+        <div class="sticky-counter-bar py-3 px-4 rounded-3 mb-4 d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-3">
+                <span class="fs-5 fw-bold text-dark me-2">
+                    <i class="fa-solid fa-vote-yea text-primary me-2"></i>{{ committee.title }}
+                </span>
+                <span v-if="currentTeacher" class="badge bg-info fs-6 text-dark">
+                    <i class="fa-solid fa-user me-1"></i>投票人：[[ currentTeacher.name ]]
+                </span>
+                <span :class="['badge', 'fs-5', selectedIds.length > maxVotes ? 'bg-danger' : 'bg-success']">
+                    已圈選 [[ selectedIds.length ]] / 上限 [[ maxVotes ]] 人
+                </span>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button v-if="authMode === 'direct'" class="btn btn-outline-secondary btn-sm" @click="currentTeacher = null">
+                    取消並返回重選
+                </button>
+                <button class="btn btn-success btn-lg fw-bold shadow" 
+                    :disabled="selectedIds.length === 0 || selectedIds.length > maxVotes" 
+                    @click="openReviewModal">
+                    <i class="fa-solid fa-paper-plane me-2"></i>確認並準備送出選票
+                </button>
+            </div>
+        </div>
+
+        <!-- 即時搜尋列 -->
+        <div class="card card-custom bg-white p-3 mb-4">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light"><i class="fa-solid fa-search"></i></span>
+                        <input type="text" class="form-control" placeholder="輸入姓名或號次搜尋候選人..." v-model="candidateSearchQuery">
+                    </div>
+                </div>
+                <div class="col-md-6 text-md-end text-muted small">
+                    點擊卡片即可完成打勾圈選，最多可圈選 [[ maxVotes ]] 人。
+                </div>
+            </div>
+        </div>
+
+        <!-- 4 欄網格選票卡片 Layout -->
+        <div class="row g-3 mb-5">
+            <div class="col-sm-6 col-md-4 col-lg-3" v-for="c in filteredCandidates" :key="c.id">
+                <div :class="['card', 'candidate-card', 'p-3', { selected: selectedIds.includes(c.id) }]"
+                    @click="toggleSelection(c.id)">
+                    
+                    <i class="fa-solid fa-circle-check check-icon"></i>
+
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="number-circle">[[ c.candidate_number ]]</div>
+                        <div>
+                            <h5 class="fw-bold mb-1 text-dark">[[ c.name ]]</h5>
+                            <div class="d-flex gap-1 flex-wrap">
+                                <span v-if="showGender" :class="['badge', c.gender === '女' ? 'badge-gender-f' : 'badge-gender-m']">
+                                    [[ c.gender ]]
+                                </span>
+                                <span v-if="showAdmin" :class="['badge', c.is_admin ? 'bg-warning text-dark' : 'bg-secondary']">
+                                    [[ c.is_admin ? '兼行政' : '未兼行政' ]]
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 送出前核對確認 Modal -->
+        <div class="modal fade" id="reviewModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title"><i class="fa-solid fa-clipboard-check me-2"></i>核對選票圈選名單</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <p class="text-muted">您本次無記名選票共圈選了 <strong class="text-success fs-5">[[ selectedIds.length ]]</strong> 位候選人：</p>
+                        
+                        <ul class="list-group mb-3">
+                            <li class="list-group-item d-flex justify-content-between align-items-center" 
+                                v-for="c in selectedCandidatesList" :key="c.id">
+                                <div>
+                                    <span class="badge bg-secondary me-2">號碼 [[ c.candidate_number ]]</span>
+                                    <strong class="fs-6">[[ c.name ]]</strong>
+                                </div>
+                                <div>
+                                    <span v-if="showGender" :class="['badge', c.gender === '女' ? 'badge-gender-f' : 'badge-gender-m', 'me-1']">[[ c.gender ]]</span>
+                                    <span v-if="showAdmin" :class="['badge', c.is_admin ? 'bg-warning text-dark' : 'bg-secondary']">
+                                        [[ c.is_admin ? '兼行政' : '未兼行政' ]]
+                                    </span>
+                                </div>
+                            </li>
+                        </ul>
+
+                        <div class="alert alert-warning py-2 small mb-0">
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i>注意：送出後即完成投遞且不可塗改。
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">返回修改</button>
+                        <button type="button" class="btn btn-success btn-lg fw-bold" @click="submitBallot">
+                            <i class="fa-solid fa-check me-1"></i>確認送出選票
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const { createApp } = Vue;
+
+createApp({
+    delimiters: ['[[', ']]'],
+    data() {
+        return {
+            committeeId: {{ committee.id }},
+            maxVotes: {{ committee.max_votes_per_ballot }},
+            authMode: "{{ committee.auth_mode or 'direct' }}",
+            showGender: {{ 1 if committee.show_gender else 0 }},
+            showAdmin: {{ 1 if committee.show_admin else 0 }},
+            voterCode: '',
+            isAuthenticated: false,
+            allTeachers: {{ teachers | tojson }},
+            votedTeacherIds: [],
+            currentTeacher: null,
+            candidates: [],
+            selectedIds: [],
+            teacherSearchQuery: '',
+            candidateSearchQuery: ''
+        }
+    },
+    computed: {
+        filteredTeachers() {
+            if (!this.teacherSearchQuery) return this.allTeachers;
+            return this.allTeachers.filter(t => t.name.includes(this.teacherSearchQuery));
+        },
+        filteredCandidates() {
+            if (!this.candidateSearchQuery) return this.candidates;
+            return this.candidates.filter(c => 
+                c.name.includes(this.candidateSearchQuery) || 
+                c.candidate_number.toString() === this.candidateSearchQuery
+            );
+        },
+        selectedCandidatesList() {
+            return this.candidates.filter(c => this.selectedIds.includes(c.id));
+        }
+    },
+    mounted() {
+        this.loadCandidates();
+        this.loadVotedTeachers();
+    },
+    methods: {
+        loadCandidates() {
+            fetch(`/api/committee/${this.committeeId}/candidates`)
+            .then(res => res.json())
+            .then(data => this.candidates = data);
+        },
+        loadVotedTeachers() {
+            fetch(`/api/committee/${this.committeeId}/voted_teachers`)
+            .then(res => res.json())
+            .then(data => this.votedTeacherIds = data);
+        },
+        isTeacherVoted(id) {
+            return this.votedTeacherIds.includes(id);
+        },
+        selectTeacherToVote(teacher) {
+            if (this.isTeacherVoted(teacher.id)) {
+                Swal.fire('提醒', '該位老師已完成過投票！', 'info');
+                return;
+            }
+            this.currentTeacher = teacher;
+            this.selectedIds = [];
+        },
+        authenticateVoter() {
+            if (!this.voterCode) {
+                Swal.fire('提醒', '請輸入個人投票密碼', 'warning');
+                return;
+            }
+
+            fetch('/api/voter_auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    committee_id: this.committeeId,
+                    voter_code: this.voterCode
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    this.isAuthenticated = true;
+                    this.currentTeacher = data.teacher;
+                    this.selectedIds = [];
+                } else {
+                    Swal.fire('驗證失敗', data.message, 'error');
+                }
+            });
+        },
+        toggleSelection(id) {
+            const idx = this.selectedIds.indexOf(id);
+            if (idx > -1) {
+                this.selectedIds.splice(idx, 1);
+            } else {
+                if (this.selectedIds.length >= this.maxVotes) {
+                    Swal.fire('超出上限', `每張選票最多只能圈選 ${this.maxVotes} 位`, 'info');
+                    return;
+                }
+                this.selectedIds.push(id);
+            }
+        },
+        openReviewModal() {
+            const modal = new bootstrap.Modal(document.getElementById('reviewModal'));
+            modal.show();
+        },
+        submitBallot() {
+            fetch('/api/vote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    committee_id: this.committeeId,
+                    teacher_id: this.currentTeacher ? this.currentTeacher.id : null,
+                    selected_candidate_ids: this.selectedIds
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('reviewModal')).hide();
+                    Swal.fire('投票完成', '您的無記名選票已順利投遞完成！', 'success')
+                    .then(() => {
+                        if (this.authMode === 'direct') {
+                            this.currentTeacher = null;
+                            this.selectedIds = [];
+                            this.loadVotedTeachers();
+                        } else {
+                            location.href = '/';
+                        }
+                    });
+                } else {
+                    Swal.fire('投遞失敗', data.message, 'error');
+                }
+            });
+        }
+    }
+}).mount('#voteApp');
+</script>
+{% endblock %}

@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ '編輯投票設定' if committee else '新增自訂投票項目' }} - 學校教師委員會投票與智慧計票系統{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-9">
+        <div class="card card-custom bg-white p-4">
+            <h3 class="fw-bold mb-3 text-primary">
+                <i class="fa-solid fa-gear me-2"></i>{{ '編輯投票設定' if committee else '建立新自訂投票項目' }}
+            </h3>
+            <p class="text-muted">可自由自訂投票名稱、正取/候補名額、認證方式與選票欄位呈現。</p>
+            <hr>
+
+            <form id="committeeForm">
+                <input type="hidden" id="committee_id" value="{{ committee.id if committee else '' }}">
+                
+                <div class="mb-3">
+                    <label for="title" class="form-label fw-bold fs-5">投票種類/名稱 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-lg" id="title" required
+                        placeholder="例：113學年度教師評審委員會 (教評會) 委員票選"
+                        value="{{ committee.title if committee else '' }}">
+                </div>
+
+                <div class="mb-4">
+                    <label for="description" class="form-label fw-bold">投票說明與備註 (選填)</label>
+                    <textarea class="form-control" id="description" rows="2" 
+                        placeholder="填寫開票時間或投票注意事項">{{ committee.description if committee else '' }}</textarea>
+                </div>
+
+                <!-- 認證模式設定 -->
+                <h5 class="fw-bold text-dark mt-4 mb-3"><i class="fa-solid fa-id-badge me-2 text-success"></i>投票領票/驗證模式 (最像紙本劃票體驗)</h5>
+                <div class="card p-3 bg-light border mb-4">
+                    {% set amode = committee.auth_mode if committee else 'direct' %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="auth_mode" id="auth_direct" value="direct" {{ 'checked' if amode == 'direct' }}>
+                        <label class="form-check-label fw-bold text-success fs-6" for="auth_direct">
+                            <i class="fa-solid fa-user-check me-1"></i>免密碼：點選姓名直接領票投票 (推薦：最像現場蓋章領選票，簡單順暢)
+                        </label>
+                        <div class="form-text ms-4">老師在投票電腦/手機點選自己姓名即可開啟選票劃選，系統自動防止重複領票！</div>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="auth_mode" id="auth_public" value="public" {{ 'checked' if amode == 'public' }}>
+                        <label class="form-check-label fw-bold text-primary fs-6" for="auth_public">
+                            <i class="fa-solid fa-globe me-1"></i>免登入：開放連結直接圈選 (隨點隨投，適用於快速現場意見投票)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="auth_mode" id="auth_passcode" value="passcode" {{ 'checked' if amode == 'passcode' }}>
+                        <label class="form-check-label text-muted fs-6" for="auth_passcode">
+                            <i class="fa-solid fa-key me-1"></i>密碼驗證：需輸入個人專屬 6 碼投票密碼
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 選票與名冊呈現欄位勾選 -->
+                <h5 class="fw-bold text-dark mt-4 mb-3"><i class="fa-solid fa-sliders me-2 text-info"></i>選票與名冊呈現欄位 (由您決定是否顯示)</h5>
+                <div class="card p-3 bg-light border mb-4">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="show_gender" 
+                            {{ 'checked' if not committee or committee.show_gender else '' }}>
+                        <label class="form-check-label fw-bold" for="show_gender">
+                            呈現性別欄位 (男性 / 女性)
+                        </label>
+                        <div class="form-text">若取消勾選，選票與名冊將不顯示性別，開票亦不進行性別比例檢核。</div>
+                    </div>
+
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="show_admin" 
+                            {{ 'checked' if not committee or committee.show_admin else '' }}>
+                        <label class="form-check-label fw-bold" for="show_admin">
+                            呈現兼任行政身分欄位 (兼任行政 / 未兼行政)
+                        </label>
+                        <div class="form-text">若取消勾選，將隱藏兼任行政身分標籤。</div>
+                    </div>
+                </div>
+
+                <!-- 名額設定 -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label for="seats_count" class="form-label fw-bold">應選名額 (正取人數)</label>
+                        <input type="number" class="form-control" id="seats_count" min="1" required
+                            value="{{ committee.seats_count if committee else 7 }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="alternate_count" class="form-label fw-bold">候補名額 (人數)</label>
+                        <input type="number" class="form-control" id="alternate_count" min="0" required
+                            value="{{ committee.alternate_count if committee else 3 }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="max_votes_per_ballot" class="form-label fw-bold">每張選票圈選上限人數</label>
+                        <input type="number" class="form-control" id="max_votes_per_ballot" min="1" required
+                            value="{{ committee.max_votes_per_ballot if committee else 4 }}">
+                    </div>
+                </div>
+
+                <!-- 性別規定 (僅在 show_gender 開啟時作用) -->
+                <h5 class="fw-bold text-dark mt-4 mb-3"><i class="fa-solid fa-scale-balanced me-2 text-primary"></i>性別保障條款 (選填)</h5>
+                <div class="mb-3">
+                    {% set rule = committee.gender_rule_type if committee else 'one_third' %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="gender_rule_type" id="rule_one_third" value="one_third" {{ 'checked' if rule == 'one_third' }}>
+                        <label class="form-check-label fw-bold text-primary" for="rule_one_third">
+                            任一性別不得少於 1/3 (教評會、考核會條款)
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="gender_rule_type" id="rule_half_female" value="half_female" {{ 'checked' if rule == 'half_female' }}>
+                        <label class="form-check-label fw-bold text-danger" for="rule_half_female">
+                            女性委員不得少於 1/2 (性平會條款)
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="gender_rule_type" id="rule_none" value="none" {{ 'checked' if rule == 'none' }}>
+                        <label class="form-check-label text-muted" for="rule_none">
+                            不設限 (僅按高低票排序)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between pt-3 border-top">
+                    <a href="/" class="btn btn-outline-secondary"><i class="fa-solid fa-arrow-left me-1"></i>返回</a>
+                    <button type="button" class="btn btn-primary btn-lg px-4" onclick="saveCommittee()">
+                        <i class="fa-solid fa-floppy-disk me-2"></i>儲存投票設定
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function saveCommittee() {
+    const id = document.getElementById('committee_id').value;
+    const title = document.getElementById('title').value;
+    if (!title) {
+        Swal.fire('錯誤', '請輸入投票種類/名稱', 'error');
+        return;
+    }
+
+    const auth_mode = document.querySelector('input[name="auth_mode"]:checked').value;
+    const gender_rule_type = document.querySelector('input[name="gender_rule_type"]:checked').value;
+
+    const payload = {
+        title: title,
+        description: document.getElementById('description').value,
+        seats_count: parseInt(document.getElementById('seats_count').value) || 5,
+        alternate_count: parseInt(document.getElementById('alternate_count').value) || 2,
+        max_votes_per_ballot: parseInt(document.getElementById('max_votes_per_ballot').value) || 4,
+        auth_mode: auth_mode,
+        show_gender: document.getElementById('show_gender').checked ? 1 : 0,
+        show_admin: document.getElementById('show_admin').checked ? 1 : 0,
+        gender_rule_type: gender_rule_type,
+        status: 'active'
+    };
+
+    const url = id ? `/api/committee/${id}` : '/api/committee';
+    const method = id ? 'PUT' : 'POST';
+
+    fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire('儲存成功', '投票設定與欄位顯示已順利儲存！', 'success')
+            .then(() => {
+                location.href = `/roster?committee_id=${data.id || id}`;
+            });
+        } else {
+            Swal.fire('儲存失敗', data.message || '系統錯誤', 'error');
+        }
+    });
+}
+</script>
+{% endblock %}
