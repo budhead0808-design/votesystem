@@ -8,9 +8,12 @@
         <h2 class="fw-bold text-dark mb-1">
             <i class="fa-solid fa-list-check text-primary me-2"></i>委員會投票項目管理
         </h2>
-        <p class="text-muted">新北市中山國小教職員工各項委員票選、統一開票與性別/身分保障智慧結算。</p>
+        <p class="text-muted mb-0">新北市中山國小教職員工各項委員票選、統一開票與性別/身分保障智慧結算。</p>
+        <div class="badge bg-danger fs-6 mt-2">
+            <i class="fa-solid fa-clock me-1"></i>投票截止時間提醒：請於 08 月 26 日 (三) 下午 04 時 00 分前投票完畢
+        </div>
     </div>
-    <div class="col-md-4 text-md-end">
+    <div class="col-md-4 text-md-end mt-3 mt-md-0">
         <a href="/committee/new" class="btn btn-primary btn-lg shadow-sm">
             <i class="fa-solid fa-plus me-2"></i>新增自訂投票項目
         </a>
@@ -80,7 +83,7 @@
         <table class="table table-hover align-middle">
             <thead class="table-light">
                 <tr>
-                    <th>投票名稱</th>
+                    <th>投票名稱與截止時間</th>
                     <th>名額 (正取/候補)</th>
                     <th>圈選限制</th>
                     <th>狀態</th>
@@ -92,9 +95,9 @@
                 <tr>
                     <td>
                         <strong class="fs-5 text-dark">{{ c.title }}</strong>
-                        {% if c.description %}
-                        <div class="small text-muted">{{ c.description }}</div>
-                        {% endif %}
+                        <div class="text-danger fw-bold small mt-1">
+                            <i class="fa-solid fa-circle-exclamation me-1"></i>截止時間：請於08月26日(三)下午04時00分前投票完畢
+                        </div>
                     </td>
                     <td>
                         <span class="badge bg-primary fs-6">正取 {{ c.seats_count }} 人</span>

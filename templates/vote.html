@@ -60,14 +60,35 @@
         background-color: #198754;
         color: white;
     }
+    .deadline-banner {
+        background: linear-gradient(135deg, #fff5f5 0%, #ffe3e3 100%);
+        border-left: 6px solid #dc3545;
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.15);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div id="voteApp" class="container">
 
+    <!-- ⏰ 極致醒目之投票截止時間警示橫幅 -->
+    <div class="alert deadline-banner p-3 mb-4 rounded-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <div class="bg-danger text-white p-2 rounded-circle">
+                <i class="fa-solid fa-clock-stop fs-3"></i>
+            </div>
+            <div>
+                <h5 class="fw-bold text-danger mb-0">
+                    ⏰ 投票截止時間：請於 08 月 26 日 (三) 下午 04 時 00 分前完成投票完畢
+                </h5>
+                <small class="text-dark">逾時系統將截止收票，請同仁把握時間撥空完成劃票投遞。</small>
+            </div>
+        </div>
+        <span class="badge bg-danger fs-6 px-3 py-2">務請留意截止時間</span>
+    </div>
+
     <!-- 1. 免密碼領票模式 (auth_mode === 'direct' 且未選擇老師時顯示) -->
-    <div v-if="authMode === 'direct' && !currentTeacher" class="py-4">
+    <div v-if="authMode === 'direct' && !currentTeacher" class="py-2">
         <div class="card card-custom bg-white p-4 text-center mb-4 border-start border-4 border-success">
             <h3 class="fw-bold text-dark mb-1">
                 <i class="fa-solid fa-stamp text-success me-2"></i>{{ committee.title }} - 點選姓名領取選票
