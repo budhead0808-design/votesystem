@@ -23,7 +23,6 @@ def init_db():
         alternate_count INTEGER NOT NULL DEFAULT 0,
         max_votes_per_ballot INTEGER NOT NULL DEFAULT 5,
         auth_mode TEXT NOT NULL DEFAULT 'passcode', 
-        -- options: 'direct' (點選姓名領票), 'public' (免驗證自由投), 'passcode' (密碼驗證)
         show_gender INTEGER NOT NULL DEFAULT 1,
         show_admin INTEGER NOT NULL DEFAULT 1,
         gender_rule_type TEXT NOT NULL DEFAULT 'none', 
@@ -75,16 +74,22 @@ def init_db():
     )
     ''')
 
-    # 投票人投票狀態表 (防重複投票)
+    # 投票人投票狀態表 (雙重比對 teacher_id 與 teacher_name 防重複投票)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS voter_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         committee_id INTEGER NOT NULL,
-        teacher_id INTEGER NOT NULL,
-        voted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(committee_id, teacher_id)
+        teacher_id INTEGER,
+        teacher_name TEXT,
+        voted_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     ''')
+
+    # 檢查 voter_logs 是否有 teacher_name 欄位
+    cursor.execute("PRAGMA table_info(voter_logs)")
+    columns = [row['name'] for row in cursor.fetchall()]
+    if 'teacher_name' not in columns:
+        cursor.execute("ALTER TABLE voter_logs ADD COLUMN teacher_name TEXT")
 
     # 實體劃票記錄表
     cursor.execute('''
@@ -108,4 +113,4 @@ def generate_voter_code(length=6):
 
 if __name__ == '__main__':
     init_db()
-    print("Database schema verified.")
+    print("Database schema verified with teacher_name in voter_logs.")

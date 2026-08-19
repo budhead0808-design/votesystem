@@ -392,7 +392,6 @@ def import_candidates(committee_id):
     cursor = conn.cursor()
     
     if target_type == 'both':
-        # 智慧 UPSERT 模式：保留既有候選人與其歷史得票紀錄！
         count = 0
         for idx, c in enumerate(candidates, start=1):
             num = c.get('candidate_number') or idx
@@ -455,8 +454,18 @@ def get_committee_candidates(committee_id):
 def get_voted_teachers(committee_id):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT teacher_id FROM voter_logs WHERE committee_id = ?", (committee_id,))
-    voted_ids = [r['teacher_id'] for r in cursor.fetchall()]
+    # 雙重比對：透過 teacher_id 與 teacher_name 永久鎖定已投票名冊
+    cursor.execute("SELECT teacher_id, teacher_name FROM voter_logs WHERE committee_id = ?", (committee_id,))
+    logs = cursor.fetchall()
+    voted_names = [r['teacher_name'] for r in logs if r['teacher_name']]
+    voted_ids = [r['teacher_id'] for r in logs if r['teacher_id']]
+
+    if voted_names:
+        placeholders = ','.join(['?'] * len(voted_names))
+        cursor.execute(f"SELECT id FROM teachers WHERE name IN ({placeholders})", voted_names)
+        voted_ids.extend([r['id'] for r in cursor.fetchall()])
+
+    voted_ids = list(set(voted_ids))
     conn.close()
     return jsonify(voted_ids)
 
@@ -498,10 +507,16 @@ def voter_auth():
         return jsonify({'success': False, 'message': '無效的投票密碼'}), 400
 
     teacher = dict(teacher)
-    cursor.execute("SELECT id FROM voter_logs WHERE committee_id = ? AND teacher_id = ?", (cid, teacher['id']))
+    
+    # 雙重鎖定：檢查 teacher_id 或 teacher_name 是否已完成過投票
+    cursor.execute("""
+        SELECT id FROM voter_logs 
+        WHERE committee_id = ? AND (teacher_id = ? OR (teacher_name IS NOT NULL AND teacher_name = ?))
+    """, (cid, teacher['id'], teacher['name']))
+
     if cursor.fetchone():
         conn.close()
-        return jsonify({'success': False, 'message': '您在此投票項目中已經完成過投票，無法重複投票'}), 400
+        return jsonify({'success': False, 'message': f'【{teacher["name"]} 老師】在此投票項目中已經完成過投票，無法重複投票！'}), 400
 
     conn.close()
     return jsonify({'success': True, 'teacher': teacher})
@@ -528,17 +543,29 @@ def submit_vote():
         conn.close()
         return jsonify({'success': False, 'message': f'圈選人數超過上限 ({max_limit} 人)'}), 400
 
-    if tid and auth_mode != 'public':
-        cursor.execute("SELECT id FROM voter_logs WHERE committee_id = ? AND teacher_id = ?", (cid, tid))
-        if cursor.fetchone():
-            conn.close()
-            return jsonify({'success': False, 'message': '該位老師已經領票/投票過了，無法重複投票'}), 400
+    t_name = None
+    if tid:
+        cursor.execute("SELECT name FROM teachers WHERE id = ?", (tid,))
+        t_row = cursor.fetchone()
+        if t_row:
+            t_name = t_row['name']
+
+        if auth_mode != 'public':
+            # 雙重鎖定防重投：比對 teacher_id 與 teacher_name
+            cursor.execute("""
+                SELECT id FROM voter_logs 
+                WHERE committee_id = ? AND (teacher_id = ? OR (teacher_name IS NOT NULL AND teacher_name = ?))
+            """, (cid, tid, t_name))
+
+            if cursor.fetchone():
+                conn.close()
+                return jsonify({'success': False, 'message': f'【{t_name} 老師】已經領票/投票過了，無法重複投票！'}), 400
 
     for cand_id in candidate_ids:
         cursor.execute("INSERT INTO ballots (committee_id, candidate_id) VALUES (?, ?)", (cid, cand_id))
 
     if tid:
-        cursor.execute("INSERT INTO voter_logs (committee_id, teacher_id) VALUES (?, ?)", (cid, tid))
+        cursor.execute("INSERT INTO voter_logs (committee_id, teacher_id, teacher_name) VALUES (?, ?, ?)", (cid, tid, t_name))
 
     conn.commit()
     conn.close()
