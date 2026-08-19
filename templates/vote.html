@@ -102,15 +102,14 @@
     </div>
     {% endif %}
 
-    <!-- 1. 教師領票與選名單區 (適用 direct 與 passcode 兩種模式) -->
+    <!-- 1. 教師領票與選名單區 -->
     <div v-if="(authMode === 'direct' || authMode === 'passcode') && !currentTeacher" class="py-1">
         <div class="card card-custom bg-white p-3 p-md-4 text-center mb-3 border-start border-4 border-success">
             <h4 class="fw-bold text-dark mb-1 fs-5 fs-md-4">
                 <i class="fa-solid fa-stamp text-success me-1"></i>{{ committee.title }}
             </h4>
             <p class="text-muted small mb-2">
-                <span v-if="authMode === 'passcode'" class="text-danger fw-bold"><i class="fa-solid fa-shield-halved me-1"></i>已啟用防冒領密碼機制：點選姓名後需輸入個人專屬密碼驗證</span>
-                <span v-else>請在下方點選您的姓名領取選票（點擊姓氏快速定位）</span>
+                <span class="text-primary fw-bold"><i class="fa-solid fa-shield-halved me-1"></i>請點選您的姓名，並輸入手機末4碼（無手機填5313）進行驗證</span>
             </p>
             
             <!-- 📱 姓氏快速篩選頁籤 -->
@@ -135,7 +134,6 @@
                     <div class="fs-6 text-truncate">[[ t.name ]]</div>
                     <div class="mt-1" style="font-size: 0.7rem;">
                         <span v-if="isTeacherVoted(t.id)" class="badge bg-dark px-1">已完成</span>
-                        <span v-else-if="authMode === 'passcode'" class="badge bg-warning text-dark px-1"><i class="fa-solid fa-key me-1"></i>需密碼</span>
                         <span v-else class="badge bg-success px-1">點擊領票</span>
                     </div>
                 </button>
@@ -143,7 +141,7 @@
         </div>
     </div>
 
-    <!-- 2. 密碼驗證對話框 Modal (啟用 passcode 模式時點選姓名後彈出) -->
+    <!-- 2. 手機末4碼驗證對話框 Modal -->
     <div class="modal fade" id="passcodeVerifyModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -155,12 +153,12 @@
                     <div class="fs-5 fw-bold text-dark mb-2" v-if="pendingTeacher">
                         【[[ pendingTeacher.name ]]】老師，您好！
                     </div>
-                    <p class="text-muted small mb-3">為確保投票公正防範冒領，請輸入您的個人 6 碼專屬投票密碼：</p>
+                    <p class="text-muted small mb-3">為確保投票公正防範冒領，請輸入您的 <strong class="text-primary">手機末 4 碼</strong>（若未留手機請輸入 <strong class="text-danger">5313</strong>）：</p>
 
                     <div class="form-floating mb-3 style-passcode">
                         <input type="text" class="form-control text-center fs-3 fw-bold letter-spacing-2" 
-                            id="voterPasscodeInput" placeholder="請輸入6碼密碼" v-model="voterCode" @keyup.enter="confirmPasscodeAuth">
-                        <label for="voterPasscodeInput">6 碼專屬密碼</label>
+                            id="voterPasscodeInput" placeholder="請輸入4碼密碼" v-model="voterCode" @keyup.enter="confirmPasscodeAuth">
+                        <label for="voterPasscodeInput">手機末 4 碼 (未留手機輸入 5313)</label>
                     </div>
                 </div>
                 <div class="modal-footer py-2">
@@ -173,7 +171,7 @@
         </div>
     </div>
 
-    <!-- 3. 選票圈選與大名冊視圖 (已領票/解鎖或公開模式時顯示) -->
+    <!-- 3. 選票圈選與大名冊視圖 -->
     <div v-if="authMode === 'public' || ((authMode === 'direct' || authMode === 'passcode') && currentTeacher)">
         <!-- 頂端固定懸浮選票計數器 -->
         <div class="sticky-counter-bar p-2 p-md-3 rounded-3 mb-3 d-flex justify-content-between align-items-center">
@@ -359,15 +357,15 @@ createApp({
         },
         confirmPasscodeAuth() {
             if (!this.voterCode) {
-                Swal.fire('提醒', '請輸入專屬 6 碼投票密碼', 'warning');
+                Swal.fire('提醒', '請輸入手機末4碼或預設密碼5313', 'warning');
                 return;
             }
 
-            const teacherCode = (this.pendingTeacher.voter_code || '').toUpperCase();
+            const teacherCode = (this.pendingTeacher.voter_code || '5313').toUpperCase();
             const inputCode = this.voterCode.trim().toUpperCase();
 
             if (inputCode !== teacherCode) {
-                Swal.fire('密碼錯誤', '您輸入的投票密碼不正確，無法驗證！', 'error');
+                Swal.fire('驗證失敗', '輸入的密碼不符，請確認手機末4碼（若無留手機填5313）！', 'error');
                 return;
             }
 

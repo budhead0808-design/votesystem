@@ -20,35 +20,23 @@ def init_db():
         title TEXT NOT NULL,
         description TEXT,
         seats_count INTEGER NOT NULL DEFAULT 5,
-        alternate_count INTEGER NOT NULL DEFAULT 2,
+        alternate_count INTEGER NOT NULL DEFAULT 0,
         max_votes_per_ballot INTEGER NOT NULL DEFAULT 5,
-        auth_mode TEXT NOT NULL DEFAULT 'direct', 
+        auth_mode TEXT NOT NULL DEFAULT 'passcode', 
         -- options: 'direct' (點選姓名領票), 'public' (免驗證自由投), 'passcode' (密碼驗證)
-        show_gender INTEGER NOT NULL DEFAULT 1, -- 1: 呈現性別欄位, 0: 隱藏
-        show_admin INTEGER NOT NULL DEFAULT 1,  -- 1: 呈現兼任行政欄位, 0: 隱藏
-        gender_rule_type TEXT NOT NULL DEFAULT 'one_third', 
-        -- options: 'none', 'one_third', 'half_female', 'custom'
+        show_gender INTEGER NOT NULL DEFAULT 1,
+        show_admin INTEGER NOT NULL DEFAULT 1,
+        gender_rule_type TEXT NOT NULL DEFAULT 'none', 
         min_male_count INTEGER DEFAULT 0,
         min_female_count INTEGER DEFAULT 0,
         identity_rule_type TEXT DEFAULT 'none',
-        -- options: 'none', 'non_admin_half', 'custom'
         min_non_admin_count INTEGER DEFAULT 0,
-        status TEXT NOT NULL DEFAULT 'active', -- 'active', 'closed'
+        status TEXT NOT NULL DEFAULT 'active',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     ''')
 
-    # 相容舊資料庫，若無新欄位則自動新增
-    cursor.execute("PRAGMA table_info(committees)")
-    columns = [row['name'] for row in cursor.fetchall()]
-    if 'auth_mode' not in columns:
-        cursor.execute("ALTER TABLE committees ADD COLUMN auth_mode TEXT DEFAULT 'direct'")
-    if 'show_gender' not in columns:
-        cursor.execute("ALTER TABLE committees ADD COLUMN show_gender INTEGER DEFAULT 1")
-    if 'show_admin' not in columns:
-        cursor.execute("ALTER TABLE committees ADD COLUMN show_admin INTEGER DEFAULT 1")
-
-    # 教師全校名冊 / 投票人密碼表
+    # 教師全校名冊表
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS teachers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +44,7 @@ def init_db():
         gender TEXT DEFAULT '男',
         department TEXT DEFAULT '一般',
         is_admin INTEGER DEFAULT 0,
-        voter_code TEXT UNIQUE,
+        voter_code TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     ''')
@@ -120,4 +108,4 @@ def generate_voter_code(length=6):
 
 if __name__ == '__main__':
     init_db()
-    print("Database updated with auth_mode, show_gender, show_admin.")
+    print("Database schema verified.")
