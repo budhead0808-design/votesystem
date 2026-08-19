@@ -5,48 +5,47 @@
 {% block extra_css %}
 <style>
     .teacher-select-btn {
-        transition: all 0.2s ease;
+        transition: all 0.15s ease;
         border-radius: 8px;
+        padding: 10px 4px !important;
     }
-    .teacher-select-btn:hover {
-        transform: translateY(-2px);
+    .teacher-select-btn:active {
+        transform: scale(0.96);
     }
     .candidate-card {
         cursor: pointer;
         border: 2px solid #e0e0e0;
-        border-radius: 12px;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 10px;
+        transition: all 0.15s ease;
         position: relative;
         overflow: hidden;
         background: white;
     }
-    .candidate-card:hover {
-        transform: translateY(-3px);
+    .candidate-card:hover, .candidate-card:active {
         border-color: #0d6efd;
-        box-shadow: 0 6px 16px rgba(13, 110, 253, 0.15);
     }
     .candidate-card.selected {
         border-color: #198754;
         background-color: #f0fdf4;
-        box-shadow: 0 0 0 3px rgba(25, 135, 84, 0.25);
+        box-shadow: 0 0 0 2px rgba(25, 135, 84, 0.3);
     }
     .candidate-card .check-icon {
         position: absolute;
-        top: 10px;
-        right: 12px;
-        font-size: 1.4rem;
+        top: 6px;
+        right: 8px;
+        font-size: 1.2rem;
         color: #198754;
         opacity: 0;
         transform: scale(0.5);
-        transition: all 0.2s ease;
+        transition: all 0.15s ease;
     }
     .candidate-card.selected .check-icon {
         opacity: 1;
         transform: scale(1);
     }
     .number-circle {
-        width: 38px;
-        height: 38px;
+        width: 32px;
+        height: 32px;
         border-radius: 50%;
         background-color: #e9ecef;
         color: #495057;
@@ -54,7 +53,8 @@
         align-items: center;
         justify-content: center;
         font-weight: 700;
-        font-size: 1.1rem;
+        font-size: 0.95rem;
+        flex-shrink: 0;
     }
     .candidate-card.selected .number-circle {
         background-color: #198754;
@@ -62,152 +62,156 @@
     }
     .deadline-banner {
         background: linear-gradient(135deg, #fff5f5 0%, #ffe3e3 100%);
-        border-left: 6px solid #dc3545;
-        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.15);
+        border-left: 5px solid #dc3545;
+        box-shadow: 0 4px 10px rgba(220, 53, 69, 0.1);
+    }
+    .surname-btn {
+        padding: 3px 8px;
+        font-size: 0.85rem;
+        border-radius: 6px;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div id="voteApp" class="container">
+<div id="voteApp" class="container-fluid px-2 px-md-3">
 
-    <!-- ⏰ 極致醒目之投票截止時間警示橫幅 -->
-    <div class="alert deadline-banner p-3 mb-3 rounded-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <div class="d-flex align-items-center gap-3">
-            <div class="bg-danger text-white p-2 rounded-circle">
-                <i class="fa-solid fa-clock-stop fs-3"></i>
+    <!-- ⏰ 投票截止時間警示橫幅 -->
+    <div class="alert deadline-banner p-2 p-md-3 mb-3 rounded-3 d-flex align-items-center justify-content-between flex-wrap gap-1">
+        <div class="d-flex align-items-center gap-2">
+            <div class="bg-danger text-white p-1 p-md-2 rounded-circle">
+                <i class="fa-solid fa-clock-stop fs-4 fs-md-3"></i>
             </div>
             <div>
-                <h5 class="fw-bold text-danger mb-0">
-                    ⏰ 投票截止時間：請於 08 月 26 日 (三) 下午 04 時 00 分前完成投票完畢
-                </h5>
-                <small class="text-dark">逾時系統將截止收票，請同仁把握時間撥空完成劃票投遞。</small>
+                <div class="fw-bold text-danger fs-6 fs-md-5">
+                    ⏰ 投票截止時間：請於 08 月 26 日 (三) 下午 04 時 00 分前完成投票
+                </div>
+                <div class="text-dark small d-none d-md-block">逾時系統將截止收票，請同仁把握時間撥空完成劃票投遞。</div>
             </div>
         </div>
-        <span class="badge bg-danger fs-6 px-3 py-2">務請留意截止時間</span>
+        <span class="badge bg-danger fs-7 px-2 py-1 ms-auto">務請留意截止時間</span>
     </div>
 
-    <!-- 📋 投票說明與注意事項欄位 (完整保留並顯眼呈現) -->
+    <!-- 📋 投票說明與注意事項 -->
     {% if committee.description %}
-    <div class="alert alert-light border border-primary border-opacity-25 shadow-sm p-3 mb-4 rounded-3">
-        <div class="fw-bold text-primary mb-1 fs-6">
-            <i class="fa-solid fa-circle-info me-2"></i>投票說明與注意事項：
+    <div class="alert alert-light border border-primary border-opacity-25 shadow-sm p-2 p-md-3 mb-3 rounded-3">
+        <div class="fw-bold text-primary mb-1 small">
+            <i class="fa-solid fa-circle-info me-1"></i>投票說明與注意事項：
         </div>
-        <div class="text-dark fs-6" style="white-space: pre-wrap; line-height: 1.6;">{{ committee.description }}</div>
+        <div class="text-dark small" style="white-space: pre-wrap; line-height: 1.5;">{{ committee.description }}</div>
     </div>
     {% endif %}
 
     <!-- 1. 免密碼領票模式 (auth_mode === 'direct' 且未選擇老師時顯示) -->
-    <div v-if="authMode === 'direct' && !currentTeacher" class="py-2">
-        <div class="card card-custom bg-white p-4 text-center mb-4 border-start border-4 border-success">
-            <h3 class="fw-bold text-dark mb-1">
-                <i class="fa-solid fa-stamp text-success me-2"></i>{{ committee.title }} - 點選姓名領取選票
-            </h3>
-            <p class="text-muted">請在下方點選您的姓名直接領取選票，免記任何密碼，簡單順暢！</p>
+    <div v-if="authMode === 'direct' && !currentTeacher" class="py-1">
+        <div class="card card-custom bg-white p-3 p-md-4 text-center mb-3 border-start border-4 border-success">
+            <h4 class="fw-bold text-dark mb-1 fs-5 fs-md-4">
+                <i class="fa-solid fa-stamp text-success me-1"></i>{{ committee.title }}
+            </h4>
+            <p class="text-muted small mb-2">請在下方點選您的姓名直接領取選票（點擊姓氏快速定位）</p>
             
-            <div class="input-group mx-auto style-search" style="max-width: 400px;">
-                <span class="input-group-text bg-light"><i class="fa-solid fa-search"></i></span>
-                <input type="text" class="form-control" placeholder="輸入姓名快速尋找..." v-model="teacherSearchQuery">
+            <!-- 📱 手機專用：姓氏快速篩選頁籤 -->
+            <div class="d-flex flex-wrap gap-1 justify-content-center mb-2">
+                <button v-for="s in commonSurnames" :key="s" 
+                    :class="['btn', 'surname-btn', selectedSurname === s ? 'btn-success fw-bold' : 'btn-outline-secondary']"
+                    @click="selectedSurname = s">
+                    [[ s ]]
+                </button>
+            </div>
+
+            <div class="input-group mx-auto style-search" style="max-width: 380px;">
+                <span class="input-group-text bg-light py-1 px-2"><i class="fa-solid fa-search"></i></span>
+                <input type="text" class="form-control form-control-sm py-2" placeholder="或輸入姓名搜尋..." v-model="teacherSearchQuery">
             </div>
         </div>
 
-        <div class="row g-3 mb-5">
-            <div class="col-6 col-sm-4 col-md-3 col-lg-2" v-for="t in filteredTeachers" :key="t.id">
-                <button :class="['btn', 'w-100', 'py-3', 'fw-bold', 'teacher-select-btn', isTeacherVoted(t.id) ? 'btn-secondary disabled opacity-50' : 'btn-outline-primary']"
+        <div class="row g-2 mb-5">
+            <div class="col-4 col-sm-3 col-md-2" v-for="t in filteredTeachers" :key="t.id">
+                <button :class="['btn', 'w-100', 'fw-bold', 'teacher-select-btn', isTeacherVoted(t.id) ? 'btn-secondary disabled opacity-50' : 'btn-outline-primary']"
                     @click="selectTeacherToVote(t)">
-                    <i class="fa-solid fa-user me-1"></i>[[ t.name ]]
-                    <div class="small mt-1">
-                        <span v-if="isTeacherVoted(t.id)" class="badge bg-dark">已完成投票</span>
-                        <span v-else class="badge bg-success">點擊領票</span>
+                    <div class="fs-6 text-truncate">[[ t.name ]]</div>
+                    <div class="mt-1" style="font-size: 0.7rem;">
+                        <span v-if="isTeacherVoted(t.id)" class="badge bg-dark px-1">已完成</span>
+                        <span v-else class="badge bg-success px-1">點擊領票</span>
                     </div>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- 2. 密碼驗證模式 (auth_mode === 'passcode' 且未驗證時顯示) -->
-    <div class="row justify-content-center py-5" v-if="authMode === 'passcode' && !isAuthenticated">
+    <!-- 2. 密碼驗證模式 -->
+    <div class="row justify-content-center py-4" v-if="authMode === 'passcode' && !isAuthenticated">
         <div class="col-md-6 col-lg-5">
             <div class="card card-custom bg-white p-4 text-center shadow-lg">
                 <div class="avatar-circle mx-auto mb-3 text-primary">
                     <i class="fa-solid fa-user-shield fs-1"></i>
                 </div>
-                <h3 class="fw-bold mb-1">{{ committee.title }}</h3>
-                <p class="text-muted small mb-4">請輸入您的個人專屬 6 碼投票密碼進行驗證</p>
+                <h4 class="fw-bold mb-1">{{ committee.title }}</h4>
+                <p class="text-muted small mb-3">請輸入您的個人專屬 6 碼投票密碼進行驗證</p>
 
                 <div class="form-floating mb-3">
                     <input type="text" class="form-control text-center fs-3 fw-bold letter-spacing-2" 
                         id="passcode" placeholder="請輸入密碼" v-model="voterCode" @keyup.enter="authenticateVoter">
-                    <label for="passcode">個人投票密碼 (6位數碼)</label>
+                    <label for="passcode">個人投票密碼</label>
                 </div>
 
                 <button class="btn btn-primary btn-lg w-100 fw-bold shadow-sm" @click="authenticateVoter">
-                    <i class="fa-solid fa-key me-2"></i>開始進行無記名圈選
+                    <i class="fa-solid fa-key me-2"></i>開始劃選選票
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- 3. 選票圈選與大名冊視圖 (已領票/解鎖或公開模式時顯示) -->
+    <!-- 3. 選票圈選與大名冊視圖 -->
     <div v-if="authMode === 'public' || (authMode === 'direct' && currentTeacher) || (authMode === 'passcode' && isAuthenticated)">
         <!-- 頂端固定懸浮選票計數器 -->
-        <div class="sticky-counter-bar py-3 px-4 rounded-3 mb-4 d-flex justify-content-between align-items-center">
-            <div class="d-flex align-items-center gap-3">
-                <span class="fs-5 fw-bold text-dark me-2">
-                    <i class="fa-solid fa-vote-yea text-primary me-2"></i>{{ committee.title }}
+        <div class="sticky-counter-bar p-2 p-md-3 rounded-3 mb-3 d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="fw-bold text-dark me-1 small">
+                    <i class="fa-solid fa-vote-yea text-primary me-1"></i>[[ currentTeacher ? currentTeacher.name + ' 老師選票' : '無記名選票' ]]
                 </span>
-                <span v-if="currentTeacher" class="badge bg-info fs-6 text-dark">
-                    <i class="fa-solid fa-user me-1"></i>投票人：[[ currentTeacher.name ]]
-                </span>
-                <span :class="['badge', 'fs-5', selectedIds.length > maxVotes ? 'bg-danger' : 'bg-success']">
+                <span :class="['badge', 'fs-6', selectedIds.length > maxVotes ? 'bg-danger' : 'bg-success']">
                     已圈選 [[ selectedIds.length ]] / 上限 [[ maxVotes ]] 人
                 </span>
             </div>
 
-            <div class="d-flex gap-2">
-                <button v-if="authMode === 'direct'" class="btn btn-outline-secondary btn-sm" @click="currentTeacher = null">
-                    取消並返回重選
+            <div class="d-flex gap-1 w-100 w-md-auto mt-1 mt-md-0">
+                <button v-if="authMode === 'direct'" class="btn btn-outline-secondary btn-sm flex-shrink-0" @click="currentTeacher = null">
+                    返回換人
                 </button>
-                <button class="btn btn-success btn-lg fw-bold shadow" 
+                <button class="btn btn-success fw-bold shadow w-100" 
                     :disabled="selectedIds.length === 0 || selectedIds.length > maxVotes" 
                     @click="openReviewModal">
-                    <i class="fa-solid fa-paper-plane me-2"></i>確認並準備送出選票
+                    <i class="fa-solid fa-paper-plane me-1"></i>確認送出選票
                 </button>
             </div>
         </div>
 
         <!-- 即時搜尋列 -->
-        <div class="card card-custom bg-white p-3 mb-4">
-            <div class="row align-items-center">
-                <div class="col-md-6">
-                    <div class="input-group">
-                        <span class="input-group-text bg-light"><i class="fa-solid fa-search"></i></span>
-                        <input type="text" class="form-control" placeholder="輸入姓名或號次搜尋候選人..." v-model="candidateSearchQuery">
-                    </div>
-                </div>
-                <div class="col-md-6 text-md-end text-muted small">
-                    點擊卡片即可完成打勾圈選，最多可圈選 [[ maxVotes ]] 人。
-                </div>
+        <div class="card card-custom bg-white p-2 p-md-3 mb-3">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text bg-light"><i class="fa-solid fa-search"></i></span>
+                <input type="text" class="form-control" placeholder="輸入姓名或號次快速搜尋候選人..." v-model="candidateSearchQuery">
             </div>
         </div>
 
-        <!-- 4 欄網格選票卡片 Layout -->
-        <div class="row g-3 mb-5">
-            <div class="col-sm-6 col-md-4 col-lg-3" v-for="c in filteredCandidates" :key="c.id">
-                <div :class="['card', 'candidate-card', 'p-3', { selected: selectedIds.includes(c.id) }]"
+        <!-- 手機版優化 2 欄網格選票卡片 Layout (82 位候選人超好找) -->
+        <div class="row g-2 mb-5">
+            <div class="col-6 col-md-4 col-lg-3" v-for="c in filteredCandidates" :key="c.id">
+                <div :class="['card', 'candidate-card', 'p-2', { selected: selectedIds.includes(c.id) }]"
                     @click="toggleSelection(c.id)">
                     
                     <i class="fa-solid fa-circle-check check-icon"></i>
 
-                    <div class="d-flex align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-2">
                         <div class="number-circle">[[ c.candidate_number ]]</div>
-                        <div>
-                            <h5 class="fw-bold mb-1 text-dark">[[ c.name ]]</h5>
-                            <div class="d-flex gap-1 flex-wrap">
-                                <span v-if="showGender" :class="['badge', c.gender === '女' ? 'badge-gender-f' : 'badge-gender-m']">
+                        <div class="text-truncate">
+                            <h6 class="fw-bold mb-0 text-dark text-truncate">[[ c.name ]]</h6>
+                            <div class="d-flex gap-1 flex-wrap mt-1" v-if="showGender || showAdmin">
+                                <span v-if="showGender" :class="['badge', c.gender === '女' ? 'badge-gender-f' : 'badge-gender-m']" style="font-size: 0.65rem;">
                                     [[ c.gender ]]
                                 </span>
-                                <span v-if="showAdmin" :class="['badge', c.is_admin ? 'bg-warning text-dark' : 'bg-secondary']">
+                                <span v-if="showAdmin" :class="['badge', c.is_admin ? 'bg-warning text-dark' : 'bg-secondary']" style="font-size: 0.65rem;">
                                     [[ c.is_admin ? '兼行政' : '未兼行政' ]]
                                 </span>
                             </div>
@@ -221,19 +225,19 @@
         <div class="modal fade" id="reviewModal" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
-                    <div class="modal-header bg-success text-white">
-                        <h5 class="modal-title"><i class="fa-solid fa-clipboard-check me-2"></i>核對選票圈選名單</h5>
+                    <div class="modal-header bg-success text-white py-2 px-3">
+                        <h5 class="modal-title fs-6"><i class="fa-solid fa-clipboard-check me-2"></i>核對選票圈選名單</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body p-4">
-                        <p class="text-muted">您本次無記名選票共圈選了 <strong class="text-success fs-5">[[ selectedIds.length ]]</strong> 位候選人：</p>
+                    <div class="modal-body p-3">
+                        <p class="text-muted small mb-2">您本次選票共圈選了 <strong class="text-success fs-5">[[ selectedIds.length ]]</strong> 位候選人：</p>
                         
-                        <ul class="list-group mb-3">
-                            <li class="list-group-item d-flex justify-content-between align-items-center" 
+                        <ul class="list-group mb-3 style-scroll" style="max-height: 250px; overflow-y: auto;">
+                            <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-2" 
                                 v-for="c in selectedCandidatesList" :key="c.id">
                                 <div>
-                                    <span class="badge bg-secondary me-2">號碼 [[ c.candidate_number ]]</span>
-                                    <strong class="fs-6">[[ c.name ]]</strong>
+                                    <span class="badge bg-secondary me-2">[[ c.candidate_number ]]號</span>
+                                    <strong class="fs-6 text-dark">[[ c.name ]]</strong>
                                 </div>
                                 <div>
                                     <span v-if="showGender" :class="['badge', c.gender === '女' ? 'badge-gender-f' : 'badge-gender-m', 'me-1']">[[ c.gender ]]</span>
@@ -248,9 +252,9 @@
                             <i class="fa-solid fa-triangle-exclamation me-1"></i>注意：送出後即完成投遞且不可塗改。
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">返回修改</button>
-                        <button type="button" class="btn btn-success btn-lg fw-bold" @click="submitBallot">
+                    <div class="modal-footer py-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">返回修改</button>
+                        <button type="button" class="btn btn-success fw-bold" @click="submitBallot">
                             <i class="fa-solid fa-check me-1"></i>確認送出選票
                         </button>
                     </div>
@@ -281,14 +285,22 @@ createApp({
             currentTeacher: null,
             candidates: [],
             selectedIds: [],
+            selectedSurname: '全部',
             teacherSearchQuery: '',
             candidateSearchQuery: ''
         }
     },
     computed: {
+        commonSurnames() {
+            const list = ['全部', '陳', '林', '黃', '張', '李', '王', '吳', '劉', '蔡', '許', '鄭', '謝', '郭', '賴', '徐', '周'];
+            return list;
+        },
         filteredTeachers() {
-            if (!this.teacherSearchQuery) return this.allTeachers;
-            return this.allTeachers.filter(t => t.name.includes(this.teacherSearchQuery));
+            return this.allTeachers.filter(t => {
+                const matchSearch = !this.teacherSearchQuery || t.name.includes(this.teacherSearchQuery);
+                const matchSurname = this.selectedSurname === '全部' || t.name.startsWith(this.selectedSurname);
+                return matchSearch && matchSurname;
+            });
         },
         filteredCandidates() {
             if (!this.candidateSearchQuery) return this.candidates;
